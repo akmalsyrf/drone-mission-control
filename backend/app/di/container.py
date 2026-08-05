@@ -52,7 +52,7 @@ async def build_container(settings: Settings) -> AppContainer:
 
     drones = DroneRepository(session_factory)
     missions = MissionRepository(session_factory)
-    supervisor = VehicleSupervisor(hub, settings)
+    supervisor = VehicleSupervisor(hub, settings, drones)
     fleet = FleetService(drones, supervisor, cache, settings)
     mission_service = MissionService(missions, drones, supervisor)
 

@@ -27,6 +27,7 @@ class GazeboSitlAdapter:
             system_address,
             source=AdapterType.GAZEBO,
             publish_hz=publish_hz,
+            # Soft wait: stream still starts on timeout so the UI is not stuck forever.
             wait_for_gps=True,
         )
 

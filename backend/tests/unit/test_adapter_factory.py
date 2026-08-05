@@ -16,8 +16,8 @@ def test_factory_routes_adapters() -> None:
     settings = Settings(app_env="test")
     cases = [
         (AdapterType.SIMULATED, "simulated://local", SimulatedVehicleAdapter),
-        (AdapterType.PX4, "udpin://0.0.0.0:14540", Px4MavsdkAdapter),
-        (AdapterType.GAZEBO, "udpin://0.0.0.0:14540", GazeboSitlAdapter),
+        (AdapterType.PX4, "udpin://0.0.0.0:14550", Px4MavsdkAdapter),
+        (AdapterType.GAZEBO, "udpin://0.0.0.0:14550", GazeboSitlAdapter),
         (AdapterType.DJI_CLOUD, "SN1", DjiCloudAdapter),
     ]
     for adapter_type, uri, expected in cases:

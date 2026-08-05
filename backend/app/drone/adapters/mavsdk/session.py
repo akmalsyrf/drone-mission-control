@@ -73,7 +73,7 @@ class MavsdkSession:
                 log.info("mavsdk_connected")
                 break
         if self._wait_for_gps:
-            await self._await_home_position(timeout_s=60.0)
+            await self._await_home_position(timeout_s=20.0)
         self._stop.clear()
         self._tasks = [
             asyncio.create_task(self._collect_position()),

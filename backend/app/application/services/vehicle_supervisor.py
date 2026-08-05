@@ -10,7 +10,8 @@ from uuid import UUID
 from app.config.logging import get_logger
 from app.config.settings import Settings
 from app.domain.entities import Drone
-from app.domain.interfaces import VehiclePort
+from app.domain.interfaces import DroneRepositoryPort, VehiclePort
+from app.domain.value_objects import ConnectionStatus
 from app.drone.factory import create_vehicle_adapter
 from app.telemetry.hub import TelemetryHub
 
@@ -18,9 +19,15 @@ logger = get_logger(__name__)
 
 
 class VehicleSupervisor:
-    def __init__(self, hub: TelemetryHub, settings: Settings) -> None:
+    def __init__(
+        self,
+        hub: TelemetryHub,
+        settings: Settings,
+        repository: DroneRepositoryPort | None = None,
+    ) -> None:
         self._hub = hub
         self._settings = settings
+        self._repository = repository
         self._adapters: dict[UUID, VehiclePort] = {}
         self._tasks: dict[UUID, asyncio.Task[None]] = {}
         self._lock = asyncio.Lock()
@@ -60,19 +67,42 @@ class VehicleSupervisor:
         for drone_id in list(self._adapters.keys()):
             await self.stop_drone(drone_id)
 
+    async def _set_status(self, drone_id: UUID, status: ConnectionStatus) -> None:
+        if self._repository is None:
+            return
+        drone = await self._repository.get(drone_id)
+        if drone is None:
+            return
+        updates: dict[str, object] = {"connection_status": status}
+        if status == ConnectionStatus.ONLINE:
+            updates["last_heartbeat"] = datetime.now(UTC)
+        await self._repository.save(drone.model_copy(update=updates))
+
     async def _run_adapter(self, drone: Drone, adapter: VehiclePort) -> None:
         log = logger.bind(drone_id=str(drone.id), name=drone.name, adapter=drone.adapter_type.value)
+        failed = False
         try:
             await adapter.connect()
-            log.info("vehicle_online")
+            log.info("vehicle_connected")
+            first_sample = True
             async for sample in adapter.stream():
                 self._heartbeats[drone.id] = datetime.now(UTC)
+                if first_sample:
+                    await self._set_status(drone.id, ConnectionStatus.ONLINE)
+                    first_sample = False
+                    log.info("vehicle_online")
                 await self._hub.publish(sample)
         except asyncio.CancelledError:
             raise
         except Exception:
+            failed = True
             log.exception("vehicle_adapter_failed")
+            with suppress(Exception):
+                await self._set_status(drone.id, ConnectionStatus.ERROR)
         finally:
             with suppress(Exception):
                 await adapter.disconnect()
+            if not failed:
+                with suppress(Exception):
+                    await self._set_status(drone.id, ConnectionStatus.OFFLINE)
             log.info("vehicle_offline")

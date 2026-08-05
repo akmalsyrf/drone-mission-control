@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import Field, PostgresDsn, RedisDsn, SecretStr, TypeAdapter
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.domain.value_objects import AdapterType
+
+# backend/app/config/settings.py → repo root is parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _postgres_dsn(value: str) -> PostgresDsn:
@@ -21,7 +25,8 @@ def _redis_dsn(value: str) -> RedisDsn:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # uvicorn cwd is backend/; also load the project-root .env
+        env_file=(_REPO_ROOT / ".env", Path(".env")),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -65,7 +70,8 @@ class Settings(BaseSettings):
 
     # Simulation (PX4 SITL + Gazebo) vs hardware endpoints
     drone_default_adapter: AdapterType = AdapterType.SIMULATED
-    mavsdk_sim_address: str = "udpin://0.0.0.0:14540"
+    # PX4 posix GCS mavlink listens on 18570 and peers with remote 14550 (not 14540).
+    mavsdk_sim_address: str = "udpin://0.0.0.0:14550"
     mavsdk_hw_address: str = "serial:///dev/ttyUSB0:921600"
     telemetry_publish_hz: float = 5.0
 

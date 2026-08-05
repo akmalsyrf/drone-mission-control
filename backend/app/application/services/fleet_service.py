@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from app.application.services.vehicle_supervisor import VehicleSupervisor
@@ -88,13 +87,8 @@ class FleetService:
         connecting = drone.model_copy(update={"connection_status": ConnectionStatus.CONNECTING})
         await self._repository.save(connecting)
         await self._supervisor.start_drone(connecting)
-        online = connecting.model_copy(
-            update={
-                "connection_status": ConnectionStatus.ONLINE,
-                "last_heartbeat": datetime.now(UTC),
-            }
-        )
-        return await self._repository.save(online)
+        # Stay CONNECTING until the supervisor receives the first telemetry sample.
+        return connecting
 
     async def disconnect_drone(self, drone_id: UUID) -> Drone:
         drone = await self.get_drone(drone_id)
@@ -122,18 +116,58 @@ class FleetService:
         await self.get_drone(drone_id)
         return await self._telemetry_cache.get_latest(drone_id)
 
+    def _prefer_gazebo(self) -> bool:
+        return (
+            self._settings.app_env == "simulation"
+            and self._settings.drone_default_adapter == AdapterType.GAZEBO
+        )
+
+    async def _normalize_gazebo_uri(self, drone: Drone) -> Drone:
+        """Rewrite legacy SITL URIs (udp://…:14540) to the current GCS listen address."""
+        uri = drone.connection_uri
+        wanted = self._settings.mavsdk_sim_address
+        legacy = "14540" in uri or uri.startswith("udp://")
+        if uri == wanted or not legacy:
+            return drone
+        updated = drone.model_copy(update={"connection_uri": wanted})
+        logger.info(
+            "gazebo_uri_normalized",
+            drone_id=str(drone.id),
+            from_uri=uri,
+            to_uri=wanted,
+        )
+        return await self._repository.save(updated)
+
     async def bootstrap_default_vehicle(self) -> Drone | None:
         """Empty fleet: seed a demo vehicle based on APP_ENV profile."""
         existing = await self._repository.list_all()
+        prefer_gazebo = self._prefer_gazebo()
+
         if existing:
             reconnectable = {
                 ConnectionStatus.ONLINE,
                 ConnectionStatus.REGISTERED,
                 ConnectionStatus.CONNECTING,
+                ConnectionStatus.ERROR,
             }
             for drone in existing:
+                if prefer_gazebo and drone.adapter_type == AdapterType.SIMULATED:
+                    # Don't compete with the real SITL stream / confuse the UI.
+                    await self._supervisor.stop_drone(drone.id)
+                    offline = drone.model_copy(update={"connection_status": ConnectionStatus.OFFLINE})
+                    await self._repository.save(offline)
+                    logger.info("simulated_skipped_for_gazebo", drone_id=str(drone.id), name=drone.name)
+                    continue
+                if prefer_gazebo and drone.adapter_type == AdapterType.GAZEBO:
+                    drone = await self._normalize_gazebo_uri(drone)
+                    # Auto-reconnect gazebo vehicles even if left offline after a previous stop.
+                    reconnectable = reconnectable | {ConnectionStatus.OFFLINE}
                 if drone.connection_status in reconnectable:
-                    await self._supervisor.start_drone(drone)
+                    connecting = drone.model_copy(
+                        update={"connection_status": ConnectionStatus.CONNECTING}
+                    )
+                    await self._repository.save(connecting)
+                    await self._supervisor.start_drone(connecting)
             return None
 
         if self._settings.app_env == "production":
@@ -141,11 +175,7 @@ class FleetService:
 
         # Without SITL running, default to in-process simulated demo vehicle.
         # Set DRONE_DEFAULT_ADAPTER=gazebo and APP_ENV=simulation when PX4+Gazebo is up.
-        use_gazebo = (
-            self._settings.app_env == "simulation"
-            and self._settings.drone_default_adapter == AdapterType.GAZEBO
-        )
-        if use_gazebo:
+        if prefer_gazebo:
             return await self.register_drone(
                 name="gazebo-sitl-1",
                 adapter_type=AdapterType.GAZEBO,
