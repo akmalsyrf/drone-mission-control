@@ -20,7 +20,7 @@ if [[ ! -f .env ]]; then
 fi
 
 # Prefer host networking path when API runs on the Mac (make backend).
-# Docker Desktop: use udp://host.docker.internal:14540 instead (see docs).
+# PX4 GCS mavlink peers with UDP 14550 — MAVSDK must *listen* there (udpin).
 python3 - <<'PY'
 from pathlib import Path
 path = Path(".env")
@@ -28,7 +28,7 @@ text = path.read_text()
 replacements = {
     "APP_ENV": "simulation",
     "DRONE_DEFAULT_ADAPTER": "gazebo",
-    "MAVSDK_SIM_ADDRESS": "udp://127.0.0.1:14540",
+    "MAVSDK_SIM_ADDRESS": "udpin://0.0.0.0:14550",
 }
 lines = []
 for line in text.splitlines():
@@ -47,7 +47,7 @@ print("Updated .env for local Gazebo SITL:")
 for k, v in {
     "APP_ENV": "simulation",
     "DRONE_DEFAULT_ADAPTER": "gazebo",
-    "MAVSDK_SIM_ADDRESS": "udp://127.0.0.1:14540",
+    "MAVSDK_SIM_ADDRESS": "udpin://0.0.0.0:14550",
 }.items():
     print(f"  {k}={v}")
 PY
@@ -56,9 +56,10 @@ echo
 echo "Next:"
 echo "  1) Terminal A:  cd ~/robotics/PX4-Autopilot && source .venv/bin/activate && make px4_sitl gz_x500"
 echo "  2) Terminal B:  docker compose up -d postgres redis mosquitto"
-echo "  3) Terminal B:  make backend   # API on host so UDP to 127.0.0.1 works"
+echo "  3) Terminal B:  make backend   # API on host so UDP to localhost works"
 echo "  4) Terminal C:  make frontend"
-echo "  5) UI: register/connect adapter_type=gazebo (or restart API to bootstrap gazebo-sitl-1)"
+echo "  5) UI: select gazebo drone — LIVE TELEMETRY should show GPS near the SITL home"
 echo
-echo "Dockerized backend instead of make backend:"
-echo "  set MAVSDK_SIM_ADDRESS=udp://host.docker.internal:14540 in .env / compose"
+echo "Note: dashboard map is MapLibre (lat/lon), not the Gazebo 3D window."
+echo "Dockerized backend on Mac:"
+echo "  keep MAVSDK_SIM_ADDRESS=udpin://0.0.0.0:14550 and publish host UDP 14550 into the container"

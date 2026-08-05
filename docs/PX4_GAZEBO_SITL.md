@@ -7,7 +7,7 @@ DMC connects over MAVLink via MAVSDK — same application layer as hardware.
 
 - PX4 Autopilot source (recommended) or prebuilt SITL
 - Gazebo (Harmonic / Garden depending on PX4 version)
-- MAVSDK-compatible MAVLink endpoint (default UDP 14540)
+- MAVSDK-compatible MAVLink endpoint (PX4 posix GCS peers with UDP **14550**)
 
 ## Host setup (typical PX4 workflow)
 
@@ -20,8 +20,8 @@ make px4_sitl gazebo-classic_iris
 Confirm MAVLink is reachable:
 
 ```bash
-# Common SITL GCS port
-# udpin://0.0.0.0:14540
+# PX4 posix GCS: local 18570 ↔ remote 14550
+# udpin://0.0.0.0:14550
 ```
 
 ## Point DMC at SITL
@@ -30,7 +30,7 @@ Confirm MAVLink is reachable:
 # .env
 APP_ENV=simulation
 DRONE_DEFAULT_ADAPTER=gazebo
-MAVSDK_SIM_ADDRESS=udpin://0.0.0.0:14540
+MAVSDK_SIM_ADDRESS=udpin://0.0.0.0:14550
 ```
 
 Then register (or let bootstrap create `gazebo-sitl-1` when adapter=gazebo):
@@ -41,7 +41,7 @@ curl -X POST http://localhost:8000/api/v1/drones \
   -d '{
     "name": "gazebo-iris",
     "adapter_type": "gazebo",
-    "connection_uri": "udpin://0.0.0.0:14540",
+    "connection_uri": "udpin://0.0.0.0:14550",
     "auto_connect": true
   }'
 ```
