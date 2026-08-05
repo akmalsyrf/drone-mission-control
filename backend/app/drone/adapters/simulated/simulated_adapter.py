@@ -26,8 +26,8 @@ class SimulatedVehicleAdapter:
         self,
         drone_id: UUID,
         *,
-        home_lat: float = 47.397742,
-        home_lon: float = 8.545594,
+        home_lat: float = 37.412176,
+        home_lon: float = -121.998877,
         publish_hz: float = 5.0,
     ) -> None:
         self._drone_id = drone_id

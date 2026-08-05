@@ -46,8 +46,7 @@ First boot seeds **`sim-alpha`** (in-process simulated vehicle) when the fleet D
 ```bash
 APP_ENV=simulation
 DRONE_DEFAULT_ADAPTER=gazebo
-MAVSDK_SIM_ADDRESS=udp://127.0.0.1:14540   # host API
-# MAVSDK_SIM_ADDRESS=udp://host.docker.internal:14540  # Docker API on Mac
+MAVSDK_SIM_ADDRESS=udpin://0.0.0.0:14550   # host API listens for PX4 GCS
 ```
 
 ## Production (real PX4)
